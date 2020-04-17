@@ -2,7 +2,7 @@
 Titel="\
 ############################################
 #  Dscription: v2ray+ws+tls onekey script  #
-#  Author: raixen@qq.com   Version: 1.0.1  #
+#  Author: raixen@qq.com   Version: 1.0.2  #
 ############################################"
 msg(){ echo -e$2 "\e[1;38m$1\e[0m"; }
 Rmsg(){ echo -e$2 "\e[1;31m$1\e[0m"; }
@@ -50,19 +50,20 @@ check_env(){
 }
 domain_check(){
 	Info; msg "开始检查域名${domain}的DNS解析情况"
+	sleep 2
 	[[ -z ${domain} ]] && Rmsg "域名不能为空" && exit 1
 	ping ${domain} -c 1 &> /dev/null
 	domain_ip=`ping ${domain} -c 1 2> /dev/null| sed '1{s/[^(]*(//;s/).*//;q}'`
 	msg "      DNS解析到 ${domain} IP：${domain_ip}"
 	command -v curl &> /dev/null || $Ins install curl -y
-	local_ip=`curl -4 ip.sb 2> /dev/null`
+	local_ip=`curl -sL -4 ip.sb 2> /dev/null`
 	msg "      本机IP: ${local_ip}"
 	if [[ "${local_ip}" == "${domain_ip}" ]] && [[ -n ${domain_ip} ]];then
 		Info; msg "DNS解析IP 与 本机IP 匹配"
 		sleep 1
 	else
 		Ymsg "[警告]" n; msg "请确认你的域名解析添加了正确的A记录，否则将无法正常使用v2ray"
-		msg "     以及 脚本无法申请到SSL证书"; ip_match="1"
+		msg "      以及 脚本无法申请到SSL证书"; ip_match="1"
 		Bmsg "[提示]" n; msg "DNS解析到的IP 与 本机IP 不匹配 是否继续安装？[Y/n]" n && read -ep " :" install
 		[[ -z $install ]] && install="y"
 		case $install in
@@ -85,8 +86,6 @@ input_parameter(){
 	option_judge;domain_ssl="$?"
 	if [[ $domain_ssl == "2" ]];then
 		Ymsg "请将域名SSL证书文件放置在 /ssl-cert 目录下，\n并更改证书文件名分别为 v2ray.crt 、v2ray.key" && mkdir /ssl-cert &> /dev/null
-		msg "      3s后继续..."
-		sleep 4
 	fi
 	domain_check
 }
@@ -97,7 +96,7 @@ dependency_install(){
 }
 install_nginx_v2ray(){
 	Info; msg "准备安装nginx、v2ray"
-	cd $WorkDir
+	rm -rf $WorkDir/v2ray; rm -rf $WorkDir/nginx-bin; cd $WorkDir
 	(systemctl stop v2ray.service &> /dev/null;systemctl stop nginx.service &> /dev/null)&
 	wget --no-check-certificate https://raw.githubusercontent.com/raixen/v2ray-script/master/tools/nginx-bin.tgz
 	judge "下载nginx"
@@ -107,8 +106,7 @@ install_nginx_v2ray(){
 	v2ray_link="https://github.com/v2ray/v2ray-core/releases/download/${new_ver}/v2ray-linux-64.zip"
 	wget --no-check-certificate -P /tmp/v2ray $v2ray_link
 	judge "下载v2ray"
-	\mv /usr/local/nginx /usr/local/nginx_old
-	tar -xzf nginx-bin.tgz && cd nginx-bin_1.17.5 && sh install.sh
+	tar -xzf nginx-bin.tgz && cd nginx-bin && bash install.sh
 	find /usr/local/nginx/* -exec touch -t `date +%Y%m%d%H%M.%S` {} \; &>/dev/null
 	systemctl daemon-reload && systemctl enable nginx.service &> /dev/null
 	judge "nginx安装"
@@ -226,7 +224,7 @@ acme(){
 }
 install_bbr(){
 	rm -f kernel-4.14.129-bbrplus.rpm
-	wget --no-check-certificate https://github.com/cx9208/bbrplus/raw/master/centos7/x86_64/kernel-4.14.129-bbrplus.rpm
+	wget --no-check-certificate https://raw.githubusercontent.com/cx9208/bbrplus/master/centos7/x86_64/kernel-4.14.129-bbrplus.rpm
 	judge "bbr内核下载" 0
 	sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
 	sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
@@ -235,7 +233,7 @@ install_bbr(){
 	if [[ $? != 0 ]];then
 		Error; msg "bbr内核安装失败";exit 1
 	fi
-	\mv /etc/sysctl.conf /etc/sysctl.old
+	\mv /etc/sysctl.conf /etc/sysctl.old &>/dev/null
 	echo "net.ipv4.tcp_congestion_control = bbrplus
 net.core.default_qdisc = fq
 fs.file-max = 1000000
@@ -331,7 +329,7 @@ show_vmess(){
 	v2_variable
     vmess_url="vmess://`cat $v2_info | base64 -w 0`"
     vmess_qr="https://redkey.top/qr/?text=${vmess_url}&size=500"
-    curl -I "${vmess_qr}" &>/dev/null && QR="0"
+    (curl -I "${vmess_qr}" &>/dev/null && (echo -e "${Blue} 浏览器生成二维码：${Font}";EchoG "${vmess_qr}";echo) )&
 	echo -e "\
 ${Blue} -- v2ray 配置信息如下：${Font}
 ${Blue} 地址（address）：${Font}$Domain
@@ -345,7 +343,7 @@ ${Blue} 路径（path）：${Font}$Path
 ${Blue} 传输层安全：${Font}tls
 ${Blue} tls证书：${Font} 允许不安全 (allowInsecure true)"
 	echo -e "${Blue} 配置信息URL链接：${Font}"; EchoG "${vmess_url}"; echo
-	[[ $QR == 0 ]] && (echo -e "${Blue} 浏览器生成二维码：${Font}";EchoG "${vmess_qr}";echo)
+	wait
 }
 v2ray_config(){
 modfiy_port(){
@@ -411,6 +409,7 @@ help_info(){
 	Echo "重新配置安装及升级v2ray："; EchoG "bash <(curl -sL https://raw.githubusercontent.com/raixen/v2ray-script/master/install.sh)";echo
 	Echo "卸载v2ray所有相关文件：" n; EchoG "bash $0 remove_all";echo
 }
+[[ `cat $0|wc -c` != 5741 ]] && exit
 menu(){
 	echo -e "------v2ray管理脚本------
 

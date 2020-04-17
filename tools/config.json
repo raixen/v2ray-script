@@ -1,0 +1,60 @@
+{
+    "log": {
+        //"access": "/usr/local/v2ray/access.log",
+        "error": "/usr/local/v2ray/error.log",
+        "loglevel": "warning"
+    },
+	"inbounds": [
+     {
+      "port": "10443",
+      "listen": "127.0.0.1",
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "UUID",
+            "alterId": 64,
+            "level": 1,
+            "email": "xxx@v2ray.com"
+          }
+         ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/v2-proxy"
+          }
+       }
+     }
+    ],
+    "outbounds": [
+     {
+        "protocol": "freedom",
+        "settings": {
+        }
+     }
+    ],
+	"dns": {
+		"server": [
+			"8.8.8.8",
+			"8.8.4.4",
+			"1.1.1.1",
+			"1.0.0.1",
+			"localhost"
+		]
+	},
+  "routing": {
+    "settings": {
+      "rules": [
+        {
+          "inboundTag": [
+            "api"
+          ],
+          "outboundTag": "api",
+          "type": "field"
+        }
+      ]
+    },
+    "strategy": "rules"
+  }
+}
